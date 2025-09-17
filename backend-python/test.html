@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Document Demystifier - Auto Mode</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 700px; margin: 50px auto; padding: 20px; background: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .upload-box { border: 2px dashed #007bff; padding: 30px; text-align: center; margin: 20px 0; border-radius: 10px; background: #f8f9fa; }
+        .upload-box:hover { background: #e3f2fd; border-color: #0056b3; }
+        input { padding: 12px; margin: 10px 0; width: 100%; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { padding: 15px 30px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; width: 100%; margin: 10px 0; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .result { margin-top: 20px; padding: 20px; border-radius: 5px; line-height: 1.6; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .loading { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .doc-info { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 15px 0; font-size: 14px; }
+        .method-badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-left: 10px; color: white; }
+        .method-text { background: #28a745; }
+        .method-ocr { background: #17a2b8; }
+        h1 { color: #333; text-align: center; margin-bottom: 10px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 Document Demystifier</h1>
+        <p class="subtitle">Auto Mode: Smart extraction with automatic fallback to OCR</p>
+        
+        <div class="upload-box">
+            <h3>📁 Upload Your PDF</h3>
+            <input type="file" id="pdfFile" accept=".pdf">
+            <input type="text" id="question" placeholder="Ask a question about the document (optional)">
+            <button onclick="analyzeDocument()">🧠 Analyze Document</button>
+            <button onclick="checkHealth()" style="background: #6c757d;">❤️ Health Check</button>
+            
+            <p style="font-size: 14px; color: #666; margin-top: 15px;">
+                <strong>How it works:</strong> Automatically tries text extraction first for speed, 
+                then falls back to OCR if needed. No manual selection required!
+            </p>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function analyzeDocument() {
+            const fileInput = document.getElementById('pdfFile');
+            const questionInput = document.getElementById('question');
+            
+            if (!fileInput.files[0]) {
+                showResult('❌ Please select a PDF file first', 'error');
+                return;
+            }
+            
+            const button = document.querySelector('button');
+            button.disabled = true;
+            button.textContent = '🔄 Processing...';
+            
+            showResult('🔄 Analyzing document... This may take a moment for scanned PDFs.', 'loading');
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                if (questionInput.value.trim()) {
+                    formData.append('question', questionInput.value.trim());
+                }
+                
+                const response = await fetch('http://localhost:5000/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    let resultHTML = `<h3>✅ Analysis Complete!</h3>`;
+                    
+                    // Document info
+                    const methodBadge = data.info.method === 'OCR' ? 'method-ocr' : 'method-text';
+                    resultHTML += `
+                        <div class="doc-info">
+                            <strong>📄 Document Information:</strong><br>
+                            📁 <strong>File:</strong> ${data.info.filename}<br>
+                            📑 <strong>Pages:</strong> ${data.info.pages} | 
+                            📝 <strong>Words:</strong> ${data.info.words}
+                            <span class="method-badge ${methodBadge}">${data.info.method}</span><br>
+                            💾 <strong>Size:</strong> ${data.info.size_mb} MB<br>
+                            ${data.info.has_question ? '❓ <strong>Question asked:</strong> Yes' : ''}
+                        </div>
+                    `;
+                    
+                    // AI explanation
+                    resultHTML += `
+                        <h4>🤖 Simple Explanation:</h4>
+                        <div style="white-space: pre-wrap; line-height: 1.6; background: #f8f9fa; padding: 15px; border-radius: 5px;">
+                            ${data.explanation}
+                        </div>
+                    `;
+                    
+                    // Extracted text (collapsible)
+                    if (data.extracted_text) {
+                        resultHTML += `
+                            <details style="margin-top: 15px;">
+                                <summary style="cursor: pointer; font-weight: bold; color: #007bff;">
+                                    📄 View Extracted Text (${data.extracted_text.length} characters)
+                                </summary>
+                                <div style="white-space: pre-wrap; max-height: 300px; overflow-y: auto; background: #f1f1f1; padding: 15px; border-radius: 5px; margin-top: 10px; font-family: monospace; font-size: 12px;">
+                                    ${data.extracted_text}
+                                </div>
+                            </details>
+                        `;
+                    }
+                    
+                    showResult(resultHTML, 'success');
+                } else {
+                    showResult(`❌ Analysis failed: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showResult(`❌ Connection error: ${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = '🧠 Analyze Document';
+            }
+        }
+        
+        async function checkHealth() {
+            showResult('🔄 Checking server health...', 'loading');
+            
+            try {
+                const response = await fetch('http://localhost:5000/health');
+                const data = await response.json();
+                
+                let healthHTML = '<h3>❤️ Server Health Check</h3>';
+                healthHTML += `<p><strong>Server:</strong> ${data.status}</p>`;
+                healthHTML += `<p><strong>Tesseract OCR:</strong> ${data.tesseract}</p>`;
+                healthHTML += `<p><strong>OpenCV:</strong> ${data.opencv}</p>`;
+                healthHTML += `<p><strong>API Key:</strong> ${data.api_key}</p>`;
+                
+                showResult(healthHTML, 'info');
+            } catch (error) {
+                showResult(`❌ Health check failed: ${error.message}`, 'error');
+            }
+        }
+        
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = message;
+            resultDiv.className = `result ${type}`;
+            resultDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // File size check
+        document.getElementById('pdfFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const sizeMB = file.size / 1024 / 1024;
+                if (sizeMB > 50) {
+                    showResult('⚠️ File too large. Maximum size is 50MB.', 'error');
+                    this.value = '';
+                } else {
+                    showResult(`📁 File selected: ${file.name} (${sizeMB.toFixed(2)} MB)`, 'info');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

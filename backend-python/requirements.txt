@@ -1,0 +1,11 @@
+flask
+flask-cors
+python-dotenv
+requests
+PyPDF2
+opencv-python
+pytesseract
+pillow
+numpy
+werkzeug
+pdf2image
